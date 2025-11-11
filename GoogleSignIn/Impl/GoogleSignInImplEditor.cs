@@ -4,11 +4,13 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 using System.Net;
 using System.Net.NetworkInformation;
 
 using UnityEngine;
+using UnityEditor;
 
 using Newtonsoft.Json.Linq;
 
@@ -45,15 +47,51 @@ namespace Google.Impl
       return new Future<GoogleSignInUser>(this);
     }
 
-    public Future<GoogleSignInUser> SignInSilently()
-    {
-      SigningIn();
-      return new Future<GoogleSignInUser>(this);
-    }
-
+    const string GoogleSignInCacheKey = "googleSignInCache";
     public void SignOut()
     {
+      SessionState.EraseString(GoogleSignInCacheKey + "Code");
+      SessionState.EraseString(GoogleSignInCacheKey);
       Debug.Log("No need on editor?");
+    }
+
+    public Future<GoogleSignInUser> SignInSilently()
+    {
+      Status = GoogleSignInStatusCode.SIGN_IN_REQUIRED;
+
+      string authCode = SessionState.GetString(GoogleSignInCacheKey + "Code",null);
+      string json = SessionState.GetString(GoogleSignInCacheKey,null);
+      Pending = !string.IsNullOrEmpty(authCode) && !string.IsNullOrEmpty(json);
+      if(Pending)
+      {
+        var taskScheduler = TaskScheduler.FromCurrentSynchronizationContext();
+        GetUserInfo(configuration,authCode,json,taskScheduler).ContinueWith((task) => {
+          try
+          {
+            Result = task.Result;
+            Status = GoogleSignInStatusCode.SUCCESS_CACHE;
+          }
+          catch(Exception e)
+          {
+            Status = GoogleSignInStatusCode.ERROR;
+
+            Debug.LogException(e);
+            if(e is AggregateException ae)
+            {
+              foreach(var inner in ae.InnerExceptions)
+                Debug.LogException(inner);
+            }
+
+            throw;
+          }
+          finally
+          {
+            Pending = false;
+          }
+        });
+      }
+
+      return new Future<GoogleSignInUser>(this);
     }
 
     static HttpListener BindLocalHostFirstAvailablePort()
@@ -120,42 +158,12 @@ namespace Google.Impl
           context.Response.OutputStream.Write(Encoding.UTF8.GetBytes("Can close this page"));
           context.Response.Close();
 
-          var jobj = await HttpWebRequest.CreateHttp("https://www.googleapis.com/oauth2/v4/token").Post("application/x-www-form-urlencoded","code=" + code + "&client_id=" + configuration.WebClientId + "&client_secret=" + configuration.ClientSecret + "&redirect_uri=" + httpListener.Prefixes.FirstOrDefault() + "&grant_type=authorization_code").ContinueWith((task) => {
-            return JObject.Parse(task.Result);
-          },taskScheduler);
+          string json = await HttpWebRequest.CreateHttp("https://www.googleapis.com/oauth2/v4/token").Post("application/x-www-form-urlencoded","code=" + code + "&client_id=" + configuration.WebClientId + "&client_secret=" + configuration.ClientSecret + "&redirect_uri=" + httpListener.Prefixes.FirstOrDefault() + "&grant_type=authorization_code").ContinueWith((task) => task.Result,taskScheduler);
 
-          var accessToken = (string)jobj.GetValue("access_token");
-          var expiresIn = (int)jobj.GetValue("expires_in");
-          var scope = (string)jobj.GetValue("scope");
-          var tokenType = (string)jobj.GetValue("token_type");
+          Result = await GetUserInfo(configuration,code,json,taskScheduler);
 
-          var user = new GoogleSignInUser();
-          if(configuration.RequestAuthCode)
-            user.AuthCode = code;
-
-          if(configuration.RequestIdToken)
-            user.IdToken = (string)jobj.GetValue("id_token");
-
-          var request = HttpWebRequest.CreateHttp("https://openidconnect.googleapis.com/v1/userinfo");
-          request.Method = "GET";
-          request.Headers.Add("Authorization", "Bearer " + accessToken);
-
-          var data = await request.GetResponseAsStringAsync().ContinueWith((task) => task.Result,taskScheduler);
-          var userInfo = JObject.Parse(data);
-          user.UserId = (string)userInfo.GetValue("sub");
-          user.DisplayName = (string)userInfo.GetValue("name");
-
-          if(configuration.RequestEmail)
-            user.Email = (string)userInfo.GetValue("email");
-
-          if(configuration.RequestProfile)
-          {
-            user.GivenName = (string)userInfo.GetValue("given_name");
-            user.FamilyName = (string)userInfo.GetValue("family_name");
-            user.ImageUrl = Uri.TryCreate((string)userInfo.GetValue("picture"),UriKind.Absolute,out var url) ? url : null;
-          }
-
-          Result = user;
+          SessionState.SetString(GoogleSignInCacheKey,json);
+          SessionState.SetString(GoogleSignInCacheKey + "Code",code);
 
           Status = GoogleSignInStatusCode.SUCCESS;
         }
@@ -178,7 +186,45 @@ namespace Google.Impl
         }
       },taskScheduler);
     }
-  }
+
+		static async Task<GoogleSignInUser> GetUserInfo(GoogleSignInConfiguration configuration,string authCode,string json,TaskScheduler taskScheduler)
+    {
+      var jobj = JObject.Parse(json);
+
+			var accessToken = (string)jobj.GetValue("access_token")!;
+			var expiresIn = (int)jobj.GetValue("expires_in")!;
+			var scope = (string)jobj.GetValue("scope")!;
+			var tokenType = (string)jobj.GetValue("token_type")!;
+
+			var user = new GoogleSignInUser();
+			if(configuration.RequestAuthCode)
+				user.AuthCode = authCode;
+
+			if(configuration.RequestIdToken)
+				user.IdToken = (string)jobj.GetValue("id_token")!;
+
+			var request = HttpWebRequest.CreateHttp("https://openidconnect.googleapis.com/v1/userinfo");
+			request.Method = "GET";
+			request.Headers.Add("Authorization","Bearer " + accessToken);
+
+			var data = await request.GetResponseAsStringAsync().ContinueWith((task) => task.Result,taskScheduler);
+			var userInfo = JObject.Parse(data);
+			user.UserId = (string)userInfo.GetValue("sub")!;
+			user.DisplayName = (string)userInfo.GetValue("name")!;
+
+			if(configuration.RequestEmail)
+				user.Email = (string)userInfo.GetValue("email")!;
+
+			if(configuration.RequestProfile)
+			{
+				user.GivenName = (string)userInfo.GetValue("given_name")!;
+				user.FamilyName = (string)userInfo.GetValue("family_name")!;
+				user.ImageUrl = Uri.TryCreate((string)userInfo.GetValue("picture")!,UriKind.Absolute,out var url) ? url : null!;
+			}
+
+			return user;
+		}
+	}
 
   public static class EditorExt
   {
