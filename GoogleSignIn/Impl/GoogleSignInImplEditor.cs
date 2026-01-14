@@ -10,7 +10,10 @@ using System.Net;
 using System.Net.NetworkInformation;
 
 using UnityEngine;
+
+#if UNITY_EDITOR 
 using UnityEditor;
+#endif
 
 using Newtonsoft.Json.Linq;
 
@@ -263,3 +266,4 @@ namespace Google.Impl
 }
 
 #endif
+
