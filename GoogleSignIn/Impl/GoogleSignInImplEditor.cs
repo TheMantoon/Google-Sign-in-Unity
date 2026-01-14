@@ -50,15 +50,18 @@ namespace Google.Impl
     const string GoogleSignInCacheKey = "googleSignInCache";
     public void SignOut()
     {
+#if UNITY_EDITOR 
       SessionState.EraseString(GoogleSignInCacheKey + "Code");
       SessionState.EraseString(GoogleSignInCacheKey);
-      Debug.Log("No need on editor?");
+#else
+      Debug.LogError("Not implemented in standalone");
+#endif
     }
 
     public Future<GoogleSignInUser> SignInSilently()
     {
       Status = GoogleSignInStatusCode.SIGN_IN_REQUIRED;
-
+#if UNITY_EDITOR 
       string authCode = SessionState.GetString(GoogleSignInCacheKey + "Code",null);
       string json = SessionState.GetString(GoogleSignInCacheKey,null);
       Pending = !string.IsNullOrEmpty(authCode) && !string.IsNullOrEmpty(json);
@@ -90,7 +93,9 @@ namespace Google.Impl
           }
         });
       }
-
+#else
+      throw new NotImplementedException();
+#endif
       return new Future<GoogleSignInUser>(this);
     }
 
@@ -162,8 +167,10 @@ namespace Google.Impl
 
           Result = await GetUserInfo(configuration,code,json,taskScheduler);
 
+#if UNITY_EDITOR 
           SessionState.SetString(GoogleSignInCacheKey,json);
           SessionState.SetString(GoogleSignInCacheKey + "Code",code);
+#endif
 
           Status = GoogleSignInStatusCode.SUCCESS;
         }
@@ -254,4 +261,5 @@ namespace Google.Impl
     public static void Write(this Stream stream,byte[] data) => stream.Write(data,0,data.Length);
   }
 }
+
 #endif
