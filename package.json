@@ -1,22 +1,22 @@
 {
-    "name": "com.google.signin",
-    "displayName": "Google Signin",
-    "version": "0.9.0",
-    "unity": "2021.3",
-    "description": "Google Signin for android, ios ,desktop",
-    "keywords": [
-        "google",
-        "signin"
-    ],
-    "dependencies": {
-        "com.unity.nuget.newtonsoft-json": "3.2.1",
-		"com.google.external-dependency-manager": "1.2.175"
-    },
-    "samples": [
-        {
-            "displayName": "SignIn Sample",
-            "description": "Simple SignIn Sample",
-            "path": "Samples~/SignInSample"
-        }
-    ]
+  "name": "com.google.signin",
+  "displayName": "Google Sign-in",
+  "version": "1.0.0",
+  "unity": "2021.3",
+  "description": "Google Sign-in for android, ios, desktop",
+  "keywords": [
+    "google",
+    "signin"
+  ],
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1",
+    "com.google.external-dependency-manager": "1.2.175"
+  },
+  "samples": [
+    {
+      "displayName": "SignIn Sample",
+      "description": "Simple SignIn Sample",
+      "path": "Samples~/SignInSample"
+    }
+  ]
 }

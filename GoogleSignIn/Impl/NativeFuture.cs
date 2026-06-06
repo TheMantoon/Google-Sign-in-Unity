@@ -18,6 +18,7 @@
 namespace Google.Impl {
   using System;
     using System.Runtime.InteropServices;
+    using UnityEngine;
 
   /// <summary>
   /// Native future is an interal class that implements the FutureAPIImpl
@@ -55,7 +56,10 @@ namespace Google.Impl {
 
         user.IdToken = GoogleSignInImpl.GoogleSignIn_GetIdToken(userPtr);
 
+        try {
         user.AuthCode = GoogleSignInImpl.GoogleSignIn_GetServerAuthCode(self);
+        } catch (Exception e) {
+        Debug.Log(e); }
 
         string url = GoogleSignInImpl.GoogleSignIn_GetImageUrl(userPtr);
         if (url?.Length > 0) {
